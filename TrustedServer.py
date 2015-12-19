@@ -8,11 +8,11 @@ class TrustedServer(AbstractServer):
         self.keys = keys
 
     def get_new_worker(self):
-        return TrustedServerWorker(self.keys)
+        return TrustedServerWorker(self.keys, self)
 
 
 class TrustedServerWorker(AbstractQueueEntity):
-    def __init__(self, keys):
+    def __init__(self, keys, parent_server=None):
         AbstractQueueEntity.__init__(self)
         self.keys = keys
         self.main_random_message = None
@@ -28,17 +28,20 @@ class TrustedServerWorker(AbstractQueueEntity):
         self.server_nonce = None
         self.client_key = None
         self.server_key = None
+        self.parent_server = parent_server
 
     def run(self):
         message_from_server = self.input_queue.get()
-        message_for_server = self.process_message_from_server_and_generate_answer(message_from_server)
+        message_for_server = \
+            self.process_message_from_server_and_generate_answer(message_from_server)
         self.output_queue.put(message_for_server)
+        self.signal_parent()
 
     def process_message_from_server_and_generate_answer(self, message):
         try:
             self.unpack_message_from_server(message)
             self.validate_nested_messages()
-        except (IndexError, InvalidMessage):
+        except (IndexError, InvalidMessage, ValueError):
             return self.error_signal
         return self.generate_response_for_server()
 
@@ -67,7 +70,7 @@ class TrustedServerWorker(AbstractQueueEntity):
 
     def unpack_message_from_server(self, message):
         self.validate_message_length(message, 5)
-        self.main_random_message = message[0]
+        self.main_random_message = int(message[0])
         self.main_client_id = message[1]
         self.main_server_id = message[2]
         self.unpack_nested_messages(message)
@@ -84,7 +87,7 @@ class TrustedServerWorker(AbstractQueueEntity):
         decrypted_message = self.decrypt_with_id_and_split(message, client_id, ':')
         self.validate_message_length(decrypted_message, 4)
         self.client_nonce = decrypted_message[0]
-        self.client_random_message = decrypted_message[1]
+        self.client_random_message = int(decrypted_message[1])
         self.client_client_id = decrypted_message[2]
         self.client_server_id = decrypted_message[3]
 
@@ -92,12 +95,14 @@ class TrustedServerWorker(AbstractQueueEntity):
         decrypted_message = self.decrypt_with_id_and_split(message, server_id, ':')
         self.validate_message_length(decrypted_message, 4)
         self.server_nonce = decrypted_message[0]
-        self.server_random_message = decrypted_message[1]
+        self.server_random_message = int(decrypted_message[1])
         self.server_client_id = decrypted_message[2]
         self.server_server_id = decrypted_message[3]
 
     def validate_nested_messages(self):
-        if not (self.client_id_matches() and self.server_id_matches() and self.random_message_matches()):
+        if not (self.client_id_matches()
+                and self.server_id_matches()
+                and self.random_message_matches()):
             raise InvalidMessage
 
     def client_id_matches(self):
@@ -108,3 +113,7 @@ class TrustedServerWorker(AbstractQueueEntity):
 
     def random_message_matches(self):
         return self.main_random_message == self.client_random_message == self.server_random_message
+
+    def signal_parent(self):
+        if self.parent_server:
+            self.parent_server.finish_worker()

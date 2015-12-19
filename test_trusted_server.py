@@ -48,7 +48,7 @@ class TrustedServerWorkerTestCase(unittest.TestCase):
         self.server_id = 'server_id'
         self.client_nonce = 'default_client_nonce'
         self.server_nonce = 'default_server_nonce'
-        self.random_value = 'default_random_value'
+        self.random_value = 471928
         self.server_key = 55
         self.client_key = 33
 
@@ -84,6 +84,7 @@ class TrustedServerWorkerTestCase(unittest.TestCase):
         client_server_id = client_server_id or server_id
         client_client_id = client_client_id or client_id
         server_nonce = server_nonce or self.server_nonce
+
         server_key = server_key or self.server_key
         server_client_id = server_client_id or client_id
         server_server_id = server_server_id or server_id
@@ -107,15 +108,14 @@ class TrustedServerWorkerTestCase(unittest.TestCase):
         return decrypt(message, key).split(':')
 
     def test_first_segment_contains_correct_random_value(self):
-        random_value = 'secret_value'
-        connect_message = self.prepare_connect_message(random_value=random_value)
+        connect_message = self.prepare_connect_message(random_value=self.random_value)
         output = self.worker.process_message_from_server_and_generate_answer(connect_message)
-        self.assertEqual(output[0], random_value)
+        self.assertEqual(output[0], self.random_value)
 
     def test_returns_error_signal_on_not_matching_random_value(self):
-        random_val_one = 'random'
-        random_val_two = 'another'
-        random_val_three = 'not-matching'
+        random_val_one = 123
+        random_val_two = 41242
+        random_val_three = 41421
         connect_message = self.prepare_connect_message(random_value=random_val_one,
                                                        client_random_value=random_val_two,
                                                        server_random_value=random_val_three)
@@ -123,9 +123,9 @@ class TrustedServerWorkerTestCase(unittest.TestCase):
         self.assertEqual(output, self.worker.error_signal)
 
     def test_returns_error_signal_when_message_is_too_long(self):
-        random_val_one = 'random'
-        random_val_two = 'another'
-        random_val_three = 'not-matching'
+        random_val_one = 123
+        random_val_two = 41242
+        random_val_three = 41421
         connect_message = self.prepare_connect_message(random_value=random_val_one,
                                                        client_random_value=random_val_two,
                                                        server_random_value=random_val_three)

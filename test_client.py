@@ -50,7 +50,7 @@ class ClientTests(unittest.TestCase):
         encrypted = self.client.prepare_message_for_server()[3]
         random = self.client.random_value
         decrypted = decrypt(encrypted, self.client_key).split(':')
-        self.assertEqual(decrypted[1], random)
+        self.assertEqual(int(decrypted[1]), random)
 
     def test_connect_sends_encrypted_random_value_at_third_position(self):
         cid = 'client_id'
@@ -67,12 +67,12 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(decrypted[3], '%s' % sid)
 
     def test_connect_from_server_unpacks_message(self):
-        random_value_from_server = 'random_value_from_server'
-        self.client.process_message_from_server(('%s' % random_value_from_server, ''))
+        random_value_from_server = 53082
+        self.client.process_message_from_server(('%s' % random_value_from_server, 'anything'))
         self.assertEqual(self.client.server_random_value, random_value_from_server)
 
     def test_connect_from_server_unpacks_encrypted_message(self):
-        random_value_from_server = 'random_value_from_server'
+        random_value_from_server = 41280
         encrypted_message = encrypt('{0}:{1}'.format('nonce', 'session-key'), self.client_key)
         self.client.process_message_from_server((random_value_from_server, encrypted_message))
         self.assertEqual(self.client.trusted_nonce, 'nonce')
@@ -81,13 +81,13 @@ class ClientTests(unittest.TestCase):
     def test_connect_from_server_if_encrypted_message_cannot_be_decrypted_to_two_elements_will_return_error_signal(
             self):
         client = Client(client_id=None, client_key=3197, server=None, server_id=None)
-        random_value_from_server = 'random_value_from_server'
+        random_value_from_server = 11
         encrypted_message = encrypt('{0}:{1}'.format('nonce', 'session-key'), self.client_key)
         response = client.process_message_from_server((random_value_from_server, encrypted_message))
         self.assertEqual(response, client.error_signal)
 
     def test_process_message_from_server_returns_error_when_nonce_does_not_match(self):
-        random_value_from_server = 'random_value_from_server'
+        random_value_from_server = 1231
         self.client.nonce = 'one-nonce'
         self.client.random_value = random_value_from_server
         encrypted_message = encrypt('{0}:{1}'.format('two-nonce', 'session-key'), self.client_key)
@@ -95,15 +95,15 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(response, self.client.error_signal)
 
     def test_process_message_from_server_returns_error_when_random_message_does_not_match(self):
-        random_value_from_server = 'random_value_from_server'
-        self.client.random_value = 'another_random_value'
+        random_value_from_server = 312789
+        self.client.random_value = 41279412
         self.client.nonce = 'one-nonce'
         encrypted_message = encrypt('{0}:{1}'.format(self.client.nonce, 'session-key'), self.client_key)
         response = self.client.process_message_from_server((random_value_from_server, encrypted_message))
         self.assertEqual(response, self.client.error_signal)
 
     def test_connect_from_server_if_nested_message_matches_returns_own_ok_signal(self):
-        random_value_from_server = 'random_value_from_server'
+        random_value_from_server =  12312
         self.client.random_value = random_value_from_server
         generated_nonce = 'generated-nonce'
         self.client.nonce = generated_nonce
@@ -159,6 +159,15 @@ class ClientRunTests(unittest.TestCase):
         self.client.process_message_from_server = MagicMock(return_value=self.client.error_signal)
         self.client.run()
         self.assertTrue(self.client.print_error_message.called)
+
+
+class ClientPrepareMessageForServerTest(unittest.TestCase):
+    def setUp(self):
+        self.client = Client(client_id='client_id', client_key=123, server='mockServer', server_id=None)
+
+    def test_first_element_of_message_is_a_number(self):
+        result = self.client.prepare_message_for_server()
+        self.assertTrue(isinstance(result[0], int))
 
 
 if __name__ == '__main__':

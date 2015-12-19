@@ -28,13 +28,20 @@ class Client(AbstractEntity):
     def prepare_message_for_server(self):
         self.generate_and_save_random_value()
         self.generate_and_save_nonce()
-        return self.random_value, self.client_id, self.server_id, self.generate_nested_message_for_trusted()
+        return self.random_value, \
+               self.client_id, \
+               self.server_id, \
+               self.generate_nested_message_for_trusted()
 
     def generate_and_save_random_value(self):
-        self.random_value = str(generate_random_key())
+        self.random_value = generate_random_key()
 
     def generate_nested_message_for_trusted(self):
-        return prepare_inner_message(self.client_key, self.nonce, self.random_value, self.client_id, self.server_id)
+        return prepare_inner_message(self.client_key,
+                                     self.nonce,
+                                     self.random_value,
+                                     self.client_id,
+                                     self.server_id)
 
     def generate_and_save_nonce(self):
         self.nonce = str(generate_random_key())
@@ -45,7 +52,7 @@ class Client(AbstractEntity):
             self.unpack_nested_message_from_trusted(message_from_server[1])
             self.validate_nonce_from_trusted_server_matches()
             self.validate_random_value()
-        except(IndexError, InvalidMessage):
+        except(IndexError, InvalidMessage, ValueError):
             return self.error_signal
         return self.ok_signal
 
@@ -56,7 +63,7 @@ class Client(AbstractEntity):
         self.session_key = decrypted[1]
 
     def validate_nonce_from_trusted_server_matches(self):
-        if not self.trusted_nonce == self.nonce:
+        if self.trusted_nonce != self.nonce:
             raise InvalidMessage
 
     def evaluate_response(self, response):
@@ -73,7 +80,7 @@ class Client(AbstractEntity):
 
     def unpack_message_from_server(self, message_from_server):
         self.validate_message_length(message_from_server, 2)
-        self.server_random_value = message_from_server[0]
+        self.server_random_value = int(message_from_server[0])
         self.unpack_nested_message_from_trusted(message_from_server[1])
 
     def validate_random_value(self):

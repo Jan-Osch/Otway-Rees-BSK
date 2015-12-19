@@ -14,7 +14,7 @@ def decrypt_character(char, key):
 
 
 def encrypt(message, key):
-    return ''.join([encode_character(char, key) for char in str(message) ])
+    return ''.join([encode_character(char, key) for char in str(message)])
 
 
 def encode_character(char, key):
@@ -22,4 +22,7 @@ def encode_character(char, key):
 
 
 def prepare_inner_message(encryption_key, nonce, random_value, client_id, server_id):
-    return encrypt('{0}:{1}:{2}:{3}'.format(nonce, random_value, client_id, server_id), encryption_key)
+    return encrypt('{0}:{1}:{2}:{3}'.format(nonce,
+                                            random_value,
+                                            client_id,
+                                            server_id), encryption_key)

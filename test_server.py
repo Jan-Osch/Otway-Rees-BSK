@@ -14,27 +14,32 @@ class ServerTest(unittest.TestCase):
 class ServerWorkerTest(unittest.TestCase):
     def setUp(self):
         self.server_id = '123124'
+        self.random_value = 257389
         self.worker = ServerWorker(server_id=self.server_id, server_key=35, trusted_server=None)
 
     def test_connect_parses_the_message(self):
-        self.worker.process_message_from_client_and_generate_message_to_trusted(['random', 'client_id', 'server_id', 'nested'])
-        self.assertEqual(self.worker.client_random_value, 'random')
+        self.worker.process_message_from_client_and_generate_message_to_trusted(
+            [self.random_value, 'client_id', 'server_id', 'nested'])
+        self.assertEqual(self.worker.client_random_value, self.random_value)
         self.assertEqual(self.worker.client_client_id, 'client_id')
         self.assertEqual(self.worker.client_server_id, 'server_id')
 
     def test_connect_from_client_for_valid_input_outputs_a_5_element_output(self):
-        output = self.worker.process_message_from_client_and_generate_message_to_trusted(('random', 'client_id', self.server_id, 'nested'))
+        output = self.worker.process_message_from_client_and_generate_message_to_trusted(
+            (self.random_value, 'client_id', self.server_id, 'nested'))
         self.assertNotEqual(output, self.worker.error_signal)
         self.assertEqual(len(output), 5)
 
     def test_connect_outputs_error_signal_if_server_id_does_not_match(self):
-        output = self.worker.process_message_from_client_and_generate_message_to_trusted(('random', 'client_id', 'wrong_id', 'nested'))
+        output = self.worker.process_message_from_client_and_generate_message_to_trusted(
+            (self.random_value, 'client_id', 'wrong_id', 'nested'))
         self.assertEqual(output, self.worker.error_signal)
 
     def test_connect_from_client_for_valid_input_5th_section_can_be_decrypted_using_server_key_to_4_element_array(self):
         server_key = 563
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
-        encrypted = self.worker.process_message_from_client_and_generate_message_to_trusted(('random', 'client_id', 'server_id_123', 'nested'))
+        encrypted = self.worker.process_message_from_client_and_generate_message_to_trusted(
+            (312421, 'client_id', 'server_id_123', 'nested'))
         self.assertNotEqual(encrypted, self.worker.error_signal)
         decrypted = decrypt(encrypted[4], server_key).split(':')
         self.assertEqual(len(decrypted), 4)
@@ -42,10 +47,11 @@ class ServerWorkerTest(unittest.TestCase):
     def test_connect_from_client_for_valid_input_5th_section_contains_server_id_client_id_nonce_and_message(self):
         server_key = 563
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
-        encrypted = self.worker.process_message_from_client_and_generate_message_to_trusted(('random', 'client_id', 'server_id_123', 'nested'))
+        encrypted = self.worker.process_message_from_client_and_generate_message_to_trusted(
+            (self.random_value, 'client_id', 'server_id_123', 'nested'))
         self.assertNotEqual(encrypted, self.worker.error_signal)
         decrypted = decrypt(encrypted[4], server_key).split(':')
-        self.assertEqual(decrypted[1], 'random')
+        self.assertEqual(int(decrypted[1]), self.random_value)
         self.assertEqual(decrypted[2], 'client_id')
         self.assertEqual(decrypted[3], 'server_id_123')
 
@@ -54,7 +60,8 @@ class ServerWorkerTest(unittest.TestCase):
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
         nested = encrypt('{0}:{1}'.format('server_nonce', 'session_key'), server_key)
         self.worker.nonce = 'server_nonce'
-        self.worker.process_message_from_trusted_and_generate_response_for_client(('random_message', 'encrypted_client_message', nested))
+        self.worker.create_response_for_client_from_message_from_trusted(
+            (self.random_value, 'encrypted_client_message', nested))
         self.assertEqual(self.worker.session_key, 'session_key')
         self.assertEqual(self.worker.trusted_nonce, 'server_nonce')
 
@@ -63,7 +70,8 @@ class ServerWorkerTest(unittest.TestCase):
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
         nested = encrypt('{0}:{1}'.format('wrong_nonce', 'session_key'), server_key)
         self.worker.nonce = 'server_nonce'
-        output = self.worker.process_message_from_trusted_and_generate_response_for_client(('random_message', 'encrypted_client_message', nested))
+        output = self.worker.create_response_for_client_from_message_from_trusted(
+            (self.random_value, 'encrypted_client_message', nested))
         self.assertEqual(output, self.worker.error_signal)
 
     def test_connect_from_trusted_returns_one_element_shorter_tuple_on_correct_data(self):
@@ -71,8 +79,9 @@ class ServerWorkerTest(unittest.TestCase):
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
         nested = encrypt('{0}:{1}'.format('server_nonce', 'session_key'), server_key)
         self.worker.nonce = 'server_nonce'
-        self.worker.client_random_value = 'random_message'
-        output = self.worker.process_message_from_trusted_and_generate_response_for_client(('random_message', 'encrypted_client_message', nested))
+        self.worker.client_random_value = self.random_value
+        output = self.worker.create_response_for_client_from_message_from_trusted(
+            (self.random_value, 'encrypted_client_message', nested))
         self.assertEqual(isinstance(output, tuple), True)
         self.assertEqual(len(output), 2)
 
