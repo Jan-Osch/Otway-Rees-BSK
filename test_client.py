@@ -4,7 +4,7 @@ from Queue import Queue
 from mock import MagicMock
 
 from Client import Client
-from Server import AbstractEntity
+from Server import AbstractQueueEntity
 from Utils import decrypt, encrypt
 
 
@@ -86,15 +86,25 @@ class ClientTests(unittest.TestCase):
         response = client.process_message_from_server((random_value_from_server, encrypted_message))
         self.assertEqual(response, client.error_signal)
 
-    def test_connect_from_server_if_nested_message_nonce_does_not_match(self):
+    def test_process_message_from_server_returns_error_when_nonce_does_not_match(self):
         random_value_from_server = 'random_value_from_server'
         self.client.nonce = 'one-nonce'
+        self.client.random_value = random_value_from_server
         encrypted_message = encrypt('{0}:{1}'.format('two-nonce', 'session-key'), self.client_key)
+        response = self.client.process_message_from_server((random_value_from_server, encrypted_message))
+        self.assertEqual(response, self.client.error_signal)
+
+    def test_process_message_from_server_returns_error_when_random_message_does_not_match(self):
+        random_value_from_server = 'random_value_from_server'
+        self.client.random_value = 'another_random_value'
+        self.client.nonce = 'one-nonce'
+        encrypted_message = encrypt('{0}:{1}'.format(self.client.nonce, 'session-key'), self.client_key)
         response = self.client.process_message_from_server((random_value_from_server, encrypted_message))
         self.assertEqual(response, self.client.error_signal)
 
     def test_connect_from_server_if_nested_message_matches_returns_own_ok_signal(self):
         random_value_from_server = 'random_value_from_server'
+        self.client.random_value = random_value_from_server
         generated_nonce = 'generated-nonce'
         self.client.nonce = generated_nonce
         encrypted_message = encrypt('{0}:{1}'.format('%s' % generated_nonce, 'session-key'), self.client_key)
@@ -106,7 +116,7 @@ class ClientRunTests(unittest.TestCase):
     def setUp(self):
         self.client_key = 1231241
         self.client_id = 'client_id_element'
-        self.mock_server = AbstractEntity()
+        self.mock_server = AbstractQueueEntity()
         self.mock_server.input_queue.put = MagicMock()
         self.mock_server_output_queue = Queue()
         self.mock_server_input_queue = Queue()
@@ -117,13 +127,11 @@ class ClientRunTests(unittest.TestCase):
             return_value=(self.mock_server_input_queue, self.mock_server_output_queue))
 
     def prepareQueues(self):
-        self.client.input_queue.put(self.client.error_signal)
-        self.client.input_queue.put(self.client.error_signal)
         self.mock_server_output_queue.put(self.client.error_signal)
 
     def test_run_puts_on_server_input_queue_result_of_own_prepare_message_for_server(self):
         self.client.print_error_message = MagicMock()
-        self.client.input_queue.put('mock')
+        self.mock_server_output_queue.put('mock')
         self.client.run()
         self.assertTrue(self.client.prepare_message_for_server.called)
         self.assertFalse(self.mock_server_input_queue.empty())
@@ -139,8 +147,7 @@ class ClientRunTests(unittest.TestCase):
 
     def test_run_when_gets_calls_print_ok_message_if_connect_from_server_returns_ok_message(self):
         self.client.print_ok_response = MagicMock()
-        self.client.input_queue.get()
-        self.client.input_queue.put('mock_message_from_server')
+        self.mock_server_output_queue.put('mock_message_from_server')
         self.client.process_message_from_server = MagicMock(return_value=self.client.ok_signal)
         self.client.run()
         self.assertTrue(self.client.print_ok_response.called)
@@ -148,7 +155,7 @@ class ClientRunTests(unittest.TestCase):
     def test_run_when_gets_calls_print_error_message_if_connect_from_server_returns_error_signal(self):
         self.client.prepare_message_for_server = MagicMock(return_value='mock_response')
         self.client.print_error_message = MagicMock()
-        self.client.input_queue.put('mock_message_from_server')
+        self.mock_server_output_queue.put('mock_message_from_server')
         self.client.process_message_from_server = MagicMock(return_value=self.client.error_signal)
         self.client.run()
         self.assertTrue(self.client.print_error_message.called)

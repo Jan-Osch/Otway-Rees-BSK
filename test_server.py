@@ -71,9 +71,10 @@ class ServerWorkerTest(unittest.TestCase):
         self.worker = ServerWorker(server_id='server_id_123', server_key=server_key, trusted_server=None)
         nested = encrypt('{0}:{1}'.format('server_nonce', 'session_key'), server_key)
         self.worker.nonce = 'server_nonce'
+        self.worker.client_random_value = 'random_message'
         output = self.worker.process_message_from_trusted_and_generate_response_for_client(('random_message', 'encrypted_client_message', nested))
-        self.assertEqual(len(output), 2)
         self.assertEqual(isinstance(output, tuple), True)
+        self.assertEqual(len(output), 2)
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from Server import AbstractServer, AbstractStoppableEntity, InvalidMessage
+from Server import AbstractServer, InvalidMessage, AbstractQueueEntity
 from Utils import decrypt, encrypt, generate_random_key
 
 
@@ -11,9 +11,9 @@ class TrustedServer(AbstractServer):
         return TrustedServerWorker(self.keys)
 
 
-class TrustedServerWorker(AbstractStoppableEntity):
+class TrustedServerWorker(AbstractQueueEntity):
     def __init__(self, keys):
-        AbstractStoppableEntity.__init__(self)
+        AbstractQueueEntity.__init__(self)
         self.keys = keys
         self.main_random_message = None
         self.main_client_id = None
@@ -30,14 +30,13 @@ class TrustedServerWorker(AbstractStoppableEntity):
         self.server_key = None
 
     def run(self):
-        message_from_server = self.get_from_queue(self.input_queue)
+        message_from_server = self.input_queue.get()
         message_for_server = self.process_message_from_server_and_generate_answer(message_from_server)
         self.output_queue.put(message_for_server)
 
     def process_message_from_server_and_generate_answer(self, message):
         try:
             self.unpack_message_from_server(message)
-            self.validate_ids()
             self.validate_nested_messages()
         except (IndexError, InvalidMessage):
             return self.error_signal
@@ -77,6 +76,7 @@ class TrustedServerWorker(AbstractStoppableEntity):
         return all([identifier in self.keys.keys() for identifier in ids])
 
     def unpack_nested_messages(self, message):
+        self.validate_ids()
         self.unpack_client_nested_message(self.main_client_id, message[3])
         self.unpack_server_nested_message(self.main_server_id, message[4])
 
@@ -97,7 +97,7 @@ class TrustedServerWorker(AbstractStoppableEntity):
         self.server_server_id = decrypted_message[3]
 
     def validate_nested_messages(self):
-        if not self.client_id_matches() and self.server_id_matches() and self.random_message_matches():
+        if not (self.client_id_matches() and self.server_id_matches() and self.random_message_matches()):
             raise InvalidMessage
 
     def client_id_matches(self):

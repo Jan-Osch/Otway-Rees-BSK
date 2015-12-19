@@ -10,9 +10,6 @@ class AbstractEntity(Thread):
         self.hello_signal = 'HELLO'
         self.error_signal = 'ERROR'
 
-        self.input_queue = Queue()
-        self.output_queue = Queue()
-
     def establish_connection(self, endpoint):
         endpoint.input_queue.put(self.hello_signal)
         return endpoint.output_queue.get()
@@ -21,14 +18,23 @@ class AbstractEntity(Thread):
         return self.error_signal == message
 
     @staticmethod
-    def validate_message_length(decrypted, intended):
-        if len(decrypted) != intended:
+    def validate_message_length(message, intended):
+        if len(message) != intended:
+            raise IndexError
+        if isinstance(message, str):
             raise IndexError
 
 
-class AbstractStoppableEntity(AbstractEntity):
+class AbstractQueueEntity(AbstractEntity):
     def __init__(self):
         AbstractEntity.__init__(self)
+        self.input_queue = Queue()
+        self.output_queue = Queue()
+
+
+class AbstractStoppableEntity(AbstractQueueEntity):
+    def __init__(self):
+        AbstractQueueEntity.__init__(self)
         self.finish_signal = 'FINISH'
         self.waiting_queues = []
 
@@ -40,15 +46,13 @@ class AbstractStoppableEntity(AbstractEntity):
         return message == self.finish_signal
 
     def get_from_queue(self, queue):
-        if queue not in self.waiting_queues:
-            self.waiting_queues.append(queue)
+        self.waiting_queues.append(queue)
         return queue.get()
 
 
 class AbstractServer(AbstractStoppableEntity):
     def __init__(self, max_connections, invoke_workers):
         AbstractStoppableEntity.__init__(self)
-        self.max_connections_signal = 'MAX_CONNECTIONS_REACHED'
         self.input_queue = Queue(maxsize=max_connections)
         self.max_connections = max_connections
         self.invoke_workers = invoke_workers
@@ -90,9 +94,9 @@ class Server(AbstractServer):
         return ServerWorker(self.server_id, self.server_key, self.trusted_server)
 
 
-class ServerWorker(AbstractStoppableEntity):
+class ServerWorker(AbstractQueueEntity):
     def __init__(self, server_id, server_key, trusted_server):
-        AbstractStoppableEntity.__init__(self)
+        AbstractQueueEntity.__init__(self)
         self.server_key = server_key
         self.server_id = server_id
         self.trusted_server = trusted_server
@@ -107,14 +111,14 @@ class ServerWorker(AbstractStoppableEntity):
         self.nonce = None
 
     def run(self):
-        message_from_client = self.get_from_queue(self.input_queue)
+        message_from_client = self.input_queue.get()
         message_to_trusted = self.process_message_from_client_and_generate_message_to_trusted(message_from_client)
         if self.is_message_error(message_to_trusted):
             self.output_queue.put(self.error_signal)
         else:
             self.connect_to_trusted()
             self.trusted_server_input_queue.put(message_to_trusted)
-            message_from_trusted = self.get_from_queue(self.trusted_server_output_queue)
+            message_from_trusted = self.trusted_server_output_queue.get()
             message_for_client = self.process_message_from_trusted_and_generate_response_for_client(
                 message_from_trusted)
             self.output_queue.put(message_for_client)
@@ -138,9 +142,7 @@ class ServerWorker(AbstractStoppableEntity):
             raise InvalidMessage
 
     def prepare_message_for_trusted_server(self, message):
-        partial = list(message)
-        partial.append(self.prepare_nested_message_for_trusted())
-        return tuple(partial)
+        return message + (self.prepare_nested_message_for_trusted(),)
 
     def prepare_nested_message_for_trusted(self):
         self.nonce = str(generate_random_key())

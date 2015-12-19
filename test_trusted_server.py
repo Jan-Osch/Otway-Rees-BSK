@@ -37,20 +37,12 @@ class TrustedServerTest(unittest.TestCase):
         output = self.trusted.output_queue.get()
         self.assertTrue(isinstance(output, tuple))
 
-    def test_can_be_stopped(self):
-        self.assertFalse(self.trusted.running)
-        self.trusted.start()
-        self.assertTrue(self.trusted.running)
-        self.trusted.finish()
-        self.trusted.join()
-        self.assertFalse(self.trusted.running)
-
     def put_multiple_messages_on_queue(self, number):
         for _ in range(number):
             self.put_message_on_queue()
 
 
-class TrustedServerWorkerTest(unittest.TestCase):
+class TrustedServerWorkerTestCase(unittest.TestCase):
     def setUp(self):
         self.client_id = 'client_id'
         self.server_id = 'server_id'
@@ -62,11 +54,6 @@ class TrustedServerWorkerTest(unittest.TestCase):
 
         self.worker = TrustedServerWorker(keys={self.client_id: self.client_key,
                                                 self.server_id: self.server_key})
-
-    def tearDown(self):
-        if self.worker.running:
-            self.worker.join()
-            self.worker.finish()
 
     def prepare_message(self, random_value, client_id, server_id, message_from_client, message_from_server):
         return random_value, client_id, server_id, message_from_client, message_from_server
@@ -125,6 +112,26 @@ class TrustedServerWorkerTest(unittest.TestCase):
         output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output[0], random_value)
 
+    def test_returns_error_signal_on_not_matching_random_value(self):
+        random_val_one = 'random'
+        random_val_two = 'another'
+        random_val_three = 'not-matching'
+        connect_message = self.prepare_connect_message(random_value=random_val_one,
+                                                       client_random_value=random_val_two,
+                                                       server_random_value=random_val_three)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
+        self.assertEqual(output, self.worker.error_signal)
+
+    def test_returns_error_signal_when_message_is_too_long(self):
+        random_val_one = 'random'
+        random_val_two = 'another'
+        random_val_three = 'not-matching'
+        connect_message = self.prepare_connect_message(random_value=random_val_one,
+                                                       client_random_value=random_val_two,
+                                                       server_random_value=random_val_three)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message + ('random',))
+        self.assertEqual(output, self.worker.error_signal)
+
     def test_output_in_second_segment_contains_client_nonce(self):
         client_nonce = 'secret_client_nonce'
         connect_message = self.prepare_connect_message(client_nonce=client_nonce)
@@ -152,16 +159,6 @@ class TrustedServerWorkerTest(unittest.TestCase):
         decrypted_third_segment = self.decrypt_and_split(self.server_key, output[2])
         self.assertEqual(decrypted_third_segment[0], nonce_from_server)
 
-    def test_returns_error_signal_on_not_matching_random_value(self):
-        random_val_one = 'random'
-        random_val_two = 'another'
-        random_val_three = 'not-matching'
-        connect_message = self.prepare_connect_message(random_value=random_val_one,
-                                                       client_random_value=random_val_two,
-                                                       server_random_value=random_val_three)
-        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
-        self.assertEqual(output, self.worker.error_signal)
-
     def test_returns_error_signal_on_not_matching_client_id(self):
         client_id_one = '1'
         client_id_two = '2'
@@ -183,12 +180,6 @@ class TrustedServerWorkerTest(unittest.TestCase):
                                                        client_server_id=server_id_three)
         output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output, self.worker.error_signal)
-
-    def test_can_be_stopped(self):
-        self.worker.start()
-        self.worker.finish()
-        self.worker.join()
-        self.assertFalse(self.worker.running)
 
 
 if __name__ == '__main__':

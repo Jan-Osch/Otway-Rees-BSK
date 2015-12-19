@@ -44,6 +44,7 @@ class Client(AbstractEntity):
             self.unpack_message_from_server(message_from_server)
             self.unpack_nested_message_from_trusted(message_from_server[1])
             self.validate_nonce_from_trusted_server_matches()
+            self.validate_random_value()
         except(IndexError, InvalidMessage):
             return self.error_signal
         return self.ok_signal
@@ -55,7 +56,8 @@ class Client(AbstractEntity):
         self.session_key = decrypted[1]
 
     def validate_nonce_from_trusted_server_matches(self):
-        return self.trusted_nonce == self.nonce
+        if not self.trusted_nonce == self.nonce:
+            raise InvalidMessage
 
     def evaluate_response(self, response):
         if response == self.error_signal:
@@ -73,3 +75,7 @@ class Client(AbstractEntity):
         self.validate_message_length(message_from_server, 2)
         self.server_random_value = message_from_server[0]
         self.unpack_nested_message_from_trusted(message_from_server[1])
+
+    def validate_random_value(self):
+        if self.random_value != self.server_random_value:
+            raise InvalidMessage
