@@ -14,7 +14,7 @@ def decrypt_character(char, key):
 
 
 def encrypt(message, key):
-    return ''.join([encode_character(char, key) for char in message])
+    return ''.join([encode_character(char, key) for char in str(message) ])
 
 
 def encode_character(char, key):

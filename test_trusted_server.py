@@ -37,10 +37,6 @@ class TrustedServerTest(unittest.TestCase):
         output = self.trusted.output_queue.get()
         self.assertTrue(isinstance(output, tuple))
 
-    def test_create_a_worker_if_connection_is_started(self):
-        self.trusted.connect()
-        self.assertEqual(self.trusted.number_of_workers, 1)
-
     def test_can_be_stopped(self):
         self.assertFalse(self.trusted.running)
         self.trusted.start()
@@ -48,20 +44,6 @@ class TrustedServerTest(unittest.TestCase):
         self.trusted.finish()
         self.trusted.join()
         self.assertFalse(self.trusted.running)
-
-    def test_puts_a_max_connections_reached_signal_when_attempting_to_create_to_many_workers(self):
-        self.trusted = TrustedServer({}, max_connections=1, invoke_workers=False)
-        self.trusted.start()
-        self.put_message_on_queue()
-        self.trusted.output_queue.get()
-        self.put_message_on_queue()
-        output = self.trusted.output_queue.get()
-        self.assertEqual(output, self.trusted.max_connections_signal)
-
-    def test_cannot_create_more_connections_than_max(self):
-        self.trusted = TrustedServer({}, max_connections=2, invoke_workers=False)
-        self.start_multiple_connections(3)
-        self.assertEquals(self.trusted.number_of_workers, 2)
 
     def put_multiple_messages_on_queue(self, number):
         for _ in range(number):
@@ -140,13 +122,13 @@ class TrustedServerWorkerTest(unittest.TestCase):
     def test_first_segment_contains_correct_random_value(self):
         random_value = 'secret_value'
         connect_message = self.prepare_connect_message(random_value=random_value)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output[0], random_value)
 
     def test_output_in_second_segment_contains_client_nonce(self):
         client_nonce = 'secret_client_nonce'
         connect_message = self.prepare_connect_message(client_nonce=client_nonce)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         decrypted_second_segment = self.decrypt_and_split(self.client_key, output[1])
         self.assertEqual(client_nonce, decrypted_second_segment[0])
 
@@ -166,7 +148,7 @@ class TrustedServerWorkerTest(unittest.TestCase):
     def test_third_segment_contains_server_nonce(self):
         nonce_from_server = 'secret_server_nonce'
         connect_message = self.prepare_connect_message(server_nonce=nonce_from_server)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         decrypted_third_segment = self.decrypt_and_split(self.server_key, output[2])
         self.assertEqual(decrypted_third_segment[0], nonce_from_server)
 
@@ -177,7 +159,7 @@ class TrustedServerWorkerTest(unittest.TestCase):
         connect_message = self.prepare_connect_message(random_value=random_val_one,
                                                        client_random_value=random_val_two,
                                                        server_random_value=random_val_three)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output, self.worker.error_signal)
 
     def test_returns_error_signal_on_not_matching_client_id(self):
@@ -188,7 +170,7 @@ class TrustedServerWorkerTest(unittest.TestCase):
         connect_message = self.prepare_connect_message(client_id=client_id_one,
                                                        client_client_id=client_id_two,
                                                        server_client_id=client_id_three)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output, self.worker.error_signal)
 
     def test_returns_error_signal_on_not_matching_server_id(self):
@@ -199,7 +181,7 @@ class TrustedServerWorkerTest(unittest.TestCase):
         connect_message = self.prepare_connect_message(server_id=server_id_one,
                                                        server_server_id=server_id_two,
                                                        client_server_id=server_id_three)
-        output = self.worker.connect(connect_message)
+        output = self.worker.process_message_from_server_and_generate_answer(connect_message)
         self.assertEqual(output, self.worker.error_signal)
 
     def test_can_be_stopped(self):
